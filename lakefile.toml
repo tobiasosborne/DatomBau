@@ -1,0 +1,10 @@
+name = "DatomBau"
+version = "0.1.0"
+defaultTargets = ["datombau"]
+
+[[lean_lib]]
+name = "DatomBau"
+
+[[lean_exe]]
+name = "datombau"
+root = "Main"
