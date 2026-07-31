@@ -7,3 +7,5 @@ import DatomBau.Schema
 import DatomBau.Spec
 import DatomBau.Transactor
 import DatomBau.Index
+import DatomBau.Pull
+import DatomBau.Query
