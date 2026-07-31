@@ -17,12 +17,12 @@ are by hand.
 
 namespace DatomBau
 
-/-- Entity ids. Transactions are entities too, allocated from the same
-fresh-id stream. -/
-abbrev EntityId := Nat
-
-/-- Transaction ids are entity ids (tx-as-entity, as in Datomic). -/
-abbrev TxId := Nat
+/- Entity and transaction ids are plain `Nat`, deliberately not abbrevs:
+`omega`'s frontend matches hypothesis types *syntactically* against
+`Nat`/`Int`/`Fin` (`match_expr` in `Lean.Elab.Tactic.Omega.Frontend`), so a
+fact stated at an abbrev like `TxId` is silently invisible to it. Since
+transactions are entities (one shared id stream), the type distinction was
+notational anyway. Field names (`e`, `tx`) carry the meaning. -/
 
 /-- A namespaced keyword, e.g. `:person/name` is `⟨some "person", "name"⟩`. -/
 structure Keyword where
@@ -66,7 +66,7 @@ inductive Value where
   | str     (s : String)
   | int     (n : Int)
   | bool    (b : Bool)
-  | ref     (e : EntityId)
+  | ref     (e : Nat)
   | keyword (k : Keyword)
   | instant (t : Nat)
   deriving DecidableEq, Repr, Inhabited
@@ -123,7 +123,7 @@ instance : Std.LawfulEqOrd Value := inferInstanceAs (Std.LawfulEqCmp Value.cmp)
 /-- A fact: entity `e` has value `v` for attribute `a`. Facts are what a
 database *currently* claims; datoms are facts stamped with provenance. -/
 structure Fact where
-  e : EntityId
+  e : Nat
   a : Keyword
   v : Value
   deriving DecidableEq, Repr
@@ -138,7 +138,7 @@ structure TxDatom extends Fact where
 /-- The full five-tuple datom `(e a v tx added)`, as a *derived* view
 produced by flattening the log. -/
 structure Datom extends Fact where
-  tx    : TxId
+  tx    : Nat
   added : Bool
   deriving DecidableEq, Repr
 
@@ -146,7 +146,7 @@ structure Datom extends Fact where
 asserted it. The four covering indexes are `TreeSet Entry`s under the four
 sort orders below. -/
 structure Entry extends Fact where
-  tx : TxId
+  tx : Nat
   deriving DecidableEq, Repr
 
 namespace Entry
