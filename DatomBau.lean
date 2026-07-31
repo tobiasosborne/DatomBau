@@ -1,15 +1,5 @@
--- This module serves as the root of the `DatomBau` library.
--- Import modules here that should be built as part of the library.
+-- Root of the `DatomBau` library: a verified Datomic core.
+-- The append-only transaction log is ground truth; indexes and queries
+-- are proven projections of it. Modules land phase by phase.
 
-import DatomBau.Basic
 import DatomBau.Core
-import DatomBau.Index
-import DatomBau.Schema
-import DatomBau.Store
-import DatomBau.Transactor
-import DatomBau.Query
-import DatomBau.Util
-
-namespace DatomBau
-
-end DatomBau
