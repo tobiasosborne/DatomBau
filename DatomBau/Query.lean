@@ -417,6 +417,34 @@ theorem IndexedDb.evalIdx_mem_iff {idb : IndexedDb} (h : idb.WF)
   evalOn_mem_congr (fun _ => IndexedDb.mem_factsIdx h) cs [[]] [[]]
     (fun _ => Iff.rfl) σ
 
+/-! ## The headline: the database is a value
+
+Queries against `asOf` views are frozen for all time — transacting never
+changes the answer of any query against any past basis. That these are
+one-line `rw`s is the point: the whole design (value-equality asOf
+theorems, spec-first evaluation, the index bridge) was chosen to make
+them so. -/
+
+theorem Db.query_asOf_stable {db db' : Db} {ops : List TxOp} {now t : Nat}
+    (h : db.transact ops now = .ok db') (ht : t ≤ db.maxTx) (q : Query) :
+    (db'.asOf t).query q = (db.asOf t).query q := by
+  rw [Db.asOf_transact h ht]
+
+/-- The same, through the full transactor with tempids and upsert. -/
+theorem Db.query_asOf_stable_data {db : Db} {forms : List TxForm}
+    {now t : Nat} {r : TxReport}
+    (h : db.transactData forms now = .ok r) (ht : t ≤ db.maxTx) (q : Query) :
+    (r.db.asOf t).query q = (db.asOf t).query q := by
+  rw [Db.asOf_transactData h ht]
+
+/-- And through the index-backed engine. -/
+theorem IndexedDb.query_asOf_stable {db : Db} {forms : List TxForm}
+    {now t : Nat} {r : TxReport}
+    (h : db.transactData forms now = .ok r) (ht : t ≤ db.maxTx) (q : Query) :
+    (IndexedDb.ofDb (r.db.asOf t)).query q =
+      (IndexedDb.ofDb (db.asOf t)).query q := by
+  rw [Db.asOf_transactData h ht]
+
 /-! ## Executable sanity checks -/
 
 private def kname : Keyword := ⟨some "person", "name"⟩

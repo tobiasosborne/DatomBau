@@ -691,6 +691,21 @@ theorem Db.transactData_invariants {db : Db} {forms : List TxForm}
     Db.transactAt_unique huo hat,
     fun t ht => Db.asOf_transactAt htx hat ht⟩
 
+/-- The freeze theorem for the full transactor — no well-formedness
+preconditions at all: freshness of the allocated ids is enough. -/
+theorem Db.asOf_transactData {db : Db} {forms : List TxForm} {now : Nat}
+    {r : TxReport} (h : db.transactData forms now = .ok r) {t : Nat}
+    (ht : t ≤ db.maxTx) : r.db.asOf t = db.asOf t := by
+  unfold Db.transactData at h
+  obtain ⟨⟨table, k⟩, -, h⟩ := except_bind_ok h
+  obtain ⟨ops, -, h⟩ := except_bind_ok h
+  obtain ⟨db', hat, h⟩ := except_bind_ok h
+  have hr : r.db = db' := by
+    simp only [pure, Except.pure] at h
+    cases h; rfl
+  rw [hr]
+  exact Db.asOf_transactAt (by omega) hat ht
+
 /-! ## Executable sanity checks -/
 
 private def kname : Keyword := ⟨some "person", "name"⟩
