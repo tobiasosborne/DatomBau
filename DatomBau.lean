@@ -5,3 +5,4 @@
 import DatomBau.Core
 import DatomBau.Schema
 import DatomBau.Spec
+import DatomBau.Transactor

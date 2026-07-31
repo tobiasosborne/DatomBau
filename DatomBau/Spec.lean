@@ -35,6 +35,10 @@ structure Transaction where
 /-- The log, oldest first. -/
 abbrev Log := List Transaction
 
+/-- A transaction's datoms stamped with its id: the five-tuple view. -/
+def Transaction.stamped (t : Transaction) : List Datom :=
+  t.datoms.map fun d => ⟨d.toFact, t.id, d.added⟩
+
 /-- A database value. `maxTx` and fresh ids are *derived* from the log —
 caching them would break the value-equality form of the asOf theorems. -/
 structure Db where
@@ -47,7 +51,7 @@ def Db.empty (s : Schema) : Db := ⟨[], s⟩
 /-- Every datom ever, oldest first, stamped with its transaction id —
 Datomic's `history` view, and the ground truth everything projects from. -/
 def Db.datoms (db : Db) : List Datom :=
-  db.log.flatMap fun t => t.datoms.map fun d => ⟨d.toFact, t.id, d.added⟩
+  db.log.flatMap Transaction.stamped
 
 /-- The last write about fact `f`: the transaction id and added-flag of the
 latest log datom with `f`'s entity, attribute, and value. -/
@@ -57,14 +61,17 @@ def Db.lastWrite (db : Db) (f : Fact) : Option (Nat × Bool) :=
 /-- A fact is current iff its last write was an assertion. -/
 def Db.contains (db : Db) (f : Fact) : Bool :=
   match db.lastWrite f with
-  | some (_, true) => true
-  | _              => false
+  | some (_, b) => b
+  | none        => false
 
 instance : Membership Fact Db := ⟨fun db f => db.contains f = true⟩
 
+theorem Db.mem_def {db : Db} {f : Fact} : f ∈ db ↔ db.contains f = true :=
+  Iff.rfl
+
 theorem Db.mem_iff_lastWrite {db : Db} {f : Fact} :
     f ∈ db ↔ ∃ tx, db.lastWrite f = some (tx, true) := by
-  show db.contains f = true ↔ _
+  rw [mem_def]
   unfold Db.contains
   cases h : db.lastWrite f with
   | none => simp
@@ -75,6 +82,10 @@ theorem Db.mem_iff_lastWrite {db : Db} {f : Fact} :
 /-- The basis: the highest transaction id in the log (0 for the empty log). -/
 def Db.maxTx (db : Db) : Nat :=
   db.log.foldl (fun m t => max m t.id) 0
+
+/-- The latest wall-clock instant in the log (0 for the empty log). -/
+def Db.lastInstant (db : Db) : Nat :=
+  db.log.foldl (fun m t => max m t.instant) 0
 
 /-- The next fresh id. Under `Db.WF` every id in the log — transaction ids,
 entity positions, ref values — is bounded by `maxTx`, so this is fresh. -/
@@ -126,9 +137,9 @@ structure Db.WF (db : Db) : Prop where
 theorem Db.WF.empty (s : Schema) : (Db.empty s).WF := by
   constructor <;> simp [Db.empty]
 
-/-! ## Flagship theorems -/
+/-! ## Bounds -/
 
-private theorem le_foldl_max {l : List Nat} {init : Nat} :
+theorem le_foldl_max {l : List Nat} {init : Nat} :
     (∀ x ∈ l, x ≤ l.foldl max init) ∧ init ≤ l.foldl max init := by
   induction l generalizing init with
   | nil => simp
@@ -145,6 +156,78 @@ theorem Db.le_maxTx {db : Db} {t : Transaction} (h : t ∈ db.log) :
   have := (le_foldl_max (l := db.log.map (·.id)) (init := 0)).1 t.id
     (List.mem_map_of_mem h)
   simpa [Db.maxTx, List.foldl_map] using this
+
+/-- Every instant in the log is bounded by the last instant. -/
+theorem Db.le_lastInstant {db : Db} {t : Transaction} (h : t ∈ db.log) :
+    t.instant ≤ db.lastInstant := by
+  have := (le_foldl_max (l := db.log.map (·.instant)) (init := 0)).1 t.instant
+    (List.mem_map_of_mem h)
+  simpa [Db.lastInstant, List.foldl_map] using this
+
+/-! ## How `append` changes the current view -/
+
+/-- A single transaction's verdict on a fact: the added-flag of its last
+datom about it, if any. -/
+def Transaction.lastOp (t : Transaction) (f : Fact) : Option Bool :=
+  (t.datoms.reverse.find? (·.toFact == f)).map (·.added)
+
+theorem Db.datoms_append (db : Db) (t : Transaction) :
+    (db.append t).datoms = db.datoms ++ t.stamped := by
+  simp [Db.append, Db.datoms]
+
+theorem Transaction.stamped_find? (t : Transaction) (f : Fact) :
+    t.stamped.reverse.find? (·.toFact == f) =
+      (t.datoms.reverse.find? (·.toFact == f)).map
+        fun d => (⟨d.toFact, t.id, d.added⟩ : Datom) := by
+  rw [Transaction.stamped, ← List.map_reverse, List.find?_map]
+  rfl
+
+theorem Db.lastWrite_append {db : Db} {t : Transaction} {f : Fact} :
+    (db.append t).lastWrite f =
+      ((t.lastOp f).map fun b => (t.id, b)).or (db.lastWrite f) := by
+  unfold Db.lastWrite Transaction.lastOp
+  rw [datoms_append, List.reverse_append, List.find?_append,
+    Transaction.stamped_find?]
+  cases t.datoms.reverse.find? (·.toFact == f) <;>
+    cases db.datoms.reverse.find? (·.toFact == f) <;> simp
+
+/-- Membership after an append: the new transaction's verdict wins; silence
+defers to the old database. -/
+theorem Db.mem_append_iff {db : Db} {t : Transaction} {f : Fact} :
+    f ∈ db.append t ↔
+      t.lastOp f = some true ∨ (t.lastOp f = none ∧ f ∈ db) := by
+  rw [mem_def, mem_def]
+  unfold Db.contains
+  rw [lastWrite_append]
+  cases h : t.lastOp f with
+  | none => simp
+  | some b => cases b <;> simp
+
+/-- A fresh entity (beyond the basis) has no current facts. Needs `WF`:
+ids in the log are bounded by their transaction ids. -/
+theorem Db.not_mem_of_fresh {db : Db} (hwf : db.WF) {f : Fact}
+    (hf : db.maxTx < f.e) : ¬ f ∈ db := by
+  rw [mem_iff_lastWrite]
+  rintro ⟨tx, hlw⟩
+  unfold Db.lastWrite at hlw
+  cases hfind : db.datoms.reverse.find? (·.toFact == f) with
+  | none => rw [hfind] at hlw; simp at hlw
+  | some d =>
+    have hd : d ∈ db.datoms := List.mem_reverse.mp (List.mem_of_find?_eq_some hfind)
+    have hdf : d.toFact = f := by
+      have := List.find?_some hfind
+      simpa using this
+    obtain ⟨tr, htr, hds⟩ := List.mem_flatMap.mp hd
+    obtain ⟨d₀, hd₀, hstamp⟩ := List.mem_map.mp hds
+    have he : d₀.e = f.e := by
+      have h1 : d.e = f.e := congrArg Fact.e hdf
+      rw [← hstamp] at h1
+      exact h1
+    have hbound := hwf.ids_bounded tr htr d₀ hd₀ d₀.e (by simp [TxDatom.entityIds])
+    have := Db.le_maxTx htr
+    omega
+
+/-! ## Flagship theorems -/
 
 /-- **asOf views are frozen**: appending a transaction with a fresh id does
 not change the database as of any earlier basis — as value equality, not
@@ -192,6 +275,7 @@ private def kname : Keyword := ⟨some "person", "name"⟩
 #guard !(specTestDb.asOf 1).contains ⟨10, kname, .str "Lovelace"⟩
 #guard specTestDb.lastWrite ⟨10, kname, .str "Ada"⟩ == some (2, false)
 #guard specTestDb.maxTx == 2
+#guard specTestDb.lastInstant == 20
 #guard (specTestDb.since 1).contains ⟨10, kname, .str "Lovelace"⟩
 #guard !(specTestDb.since 1).contains ⟨10, kname, .str "Ada"⟩
 #guard !(Db.empty .base).contains ⟨10, kname, .str "Ada"⟩
