@@ -5,7 +5,7 @@ fixed. You have, at some point, been burned by a mutable global variable.
 That is all the background this tutorial assumes.*
 
 An interactive companion with animations of everything below lives here:
-**[DatomBau — Interactive Tour](https://claude.ai/code/artifact/dbe4be21-9ecd-447b-92bb-b439b0a4b73b)**
+**[DatomBau — Interactive Tour](https://tobiasosborne.github.io/DatomBau/tour.html)**
 (time-travel slider, index re-sorting, a query stepper, and a button that
 tries — and provably fails — to change the past).
 
@@ -332,7 +332,7 @@ checks, spec-first evaluation).
 
 Watch it holding in real time: run `./run.sh`, or press "transact
 something new" in the
-[interactive tour](https://claude.ai/code/artifact/dbe4be21-9ecd-447b-92bb-b439b0a4b73b)
+[interactive tour](https://tobiasosborne.github.io/DatomBau/tour.html)
 as many times as you like.
 
 ## 8. Exercises

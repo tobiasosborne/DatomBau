@@ -27,7 +27,7 @@ flowchart TD
 
 | you want… | go to… |
 |---|---|
-| to *play* — sliders, animations, a button that provably can't change the past | **[the interactive tour](https://claude.ai/code/artifact/dbe4be21-9ecd-447b-92bb-b439b0a4b73b)** |
+| to *play* — sliders, animations, a button that provably can't change the past | **[the interactive tour](https://tobiasosborne.github.io/DatomBau/tour.html)** |
 | a guided walkthrough with runnable code (no Lean experience assumed) | **[TUTORIAL.md](TUTORIAL.md)** |
 | to see it run | `./run.sh` — builds and runs the end-to-end demo |
 | the theorems | the table below, then the files in `DatomBau/` |

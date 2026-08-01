@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive tour of DatomBau, a verified Datomic core in Lean 4: time-travel slider, index re-sorting, query stepper, and the unbreakable-past theorem.">
+<title>DatomBau — Interactive Tour</title>
+<style>
+  :root {
+    --paper: #F4F5F3;
+    --panel: #FCFCFA;
+    --ink: #1F2523;
+    --ink-soft: #5A6360;
+    --line: #D8DCD8;
+    --accent: #0E8A73;
+    --accent-soft: #0E8A7318;
+    --retract: #B3422E;
+    --retract-soft: #B3422E14;
+    --bind: #B98A2E;
+    --bind-soft: #B98A2E1F;
+    --dim: #9AA39F;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #141817; --panel: #1B211F; --ink: #E4E8E6; --ink-soft: #9FAAA5;
+      --line: #2E3634; --accent: #3FBFA8; --accent-soft: #3FBFA820;
+      --retract: #E0715B; --retract-soft: #E0715B1C; --bind: #D8AC55;
+      --bind-soft: #D8AC5522; --dim: #5D6764;
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #F4F5F3; --panel: #FCFCFA; --ink: #1F2523; --ink-soft: #5A6360;
+    --line: #D8DCD8; --accent: #0E8A73; --accent-soft: #0E8A7318;
+    --retract: #B3422E; --retract-soft: #B3422E14; --bind: #B98A2E;
+    --bind-soft: #B98A2E1F; --dim: #9AA39F;
+  }
+  :root[data-theme="dark"] {
+    --paper: #141817; --panel: #1B211F; --ink: #E4E8E6; --ink-soft: #9FAAA5;
+    --line: #2E3634; --accent: #3FBFA8; --accent-soft: #3FBFA820;
+    --retract: #E0715B; --retract-soft: #E0715B1C; --bind: #D8AC55;
+    --bind-soft: #D8AC5522; --dim: #5D6764;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: var(--serif); font-size: 17px; line-height: 1.6;
+  }
+  main { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
+  h1 {
+    font-size: 2.4rem; line-height: 1.15; margin: 0 0 .4rem; font-weight: 600;
+    text-wrap: balance; letter-spacing: -0.01em;
+  }
+  .subtitle { color: var(--ink-soft); font-size: 1.12rem; margin: 0 0 2.4rem; text-wrap: balance; }
+  h2 { font-size: 1.5rem; margin: 3rem 0 .8rem; font-weight: 600; text-wrap: balance; }
+  p { margin: .8rem 0; max-width: 65ch; }
+  em { font-style: italic; }
+  a { color: var(--accent); }
+  .eyebrow {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--accent); margin: 3.2rem 0 0;
+  }
+  code, .mono { font-family: var(--mono); font-size: .86em; }
+  .lean {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: .9rem 1.1rem; overflow-x: auto; font-family: var(--mono);
+    font-size: .8rem; line-height: 1.55; white-space: pre;
+  }
+  .kw { color: var(--accent); }
+  .cm { color: var(--dim); }
+
+  /* Figure panels */
+  .fig {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    margin: 1.6rem -1rem; padding: 1.2rem 1.4rem 1.4rem;
+  }
+  @media (max-width: 52rem) { .fig { margin: 1.6rem 0; } }
+  .figlabel {
+    font-family: var(--mono); font-size: .72rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: .8rem;
+  }
+  .figlabel b { color: var(--accent); font-weight: 600; }
+
+  /* Datom anatomy */
+  .anatomy { display: flex; flex-wrap: wrap; gap: .5rem; font-family: var(--mono); font-size: 1.0rem; align-items: stretch; }
+  .slot {
+    border: 1px solid var(--line); border-radius: 6px; padding: .55rem .8rem;
+    cursor: pointer; background: var(--paper); transition: border-color .15s, background .15s;
+    text-align: center; flex: 1 1 auto;
+  }
+  .slot small { display: block; font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); margin-top: .3rem; font-family: var(--mono); }
+  .slot.active { border-color: var(--accent); background: var(--accent-soft); }
+  .slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #anatomy-note { min-height: 3.2em; color: var(--ink-soft); font-size: .95rem; margin-top: .9rem; }
+  #anatomy-note b { color: var(--ink); }
+
+  /* Log + time machine */
+  .txcard { border: 1px solid var(--line); border-radius: 6px; margin: .6rem 0; overflow: hidden; transition: opacity .25s; }
+  .txcard.future { opacity: .32; }
+  .txhead {
+    font-family: var(--mono); font-size: .74rem; padding: .35rem .7rem;
+    background: var(--paper); border-bottom: 1px solid var(--line); color: var(--ink-soft);
+    display: flex; justify-content: space-between;
+  }
+  .txhead .txid { color: var(--accent); font-weight: 600; }
+  .drow { font-family: var(--mono); font-size: .8rem; padding: .18rem .7rem; display: flex; gap: .6rem; }
+  .drow .op { width: 1ch; font-weight: 700; }
+  .drow.add .op { color: var(--accent); }
+  .drow.retract .op { color: var(--retract); }
+  .drow.retract .body { color: var(--ink-soft); }
+  .timebar { display: flex; align-items: center; gap: 1rem; margin: 1rem 0 .4rem; }
+  .timebar input[type=range] { flex: 1; accent-color: var(--accent); }
+  .basis { font-family: var(--mono); font-size: .95rem; color: var(--accent); font-weight: 600; min-width: 8.5ch; }
+  .viewtable { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: .8rem; margin-top: .6rem; }
+  .viewtable th {
+    text-align: left; font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-soft); border-bottom: 1px solid var(--line); padding: .3rem .5rem; font-weight: 600;
+  }
+  .viewtable td { padding: .26rem .5rem; border-bottom: 1px solid var(--line); }
+  .viewtable tr.gone td { color: var(--dim); text-decoration: line-through; }
+  .viewtable td.tx { color: var(--ink-soft); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  @media (max-width: 44rem) { .split { grid-template-columns: 1fr; } }
+  .colhead { font-size: .72rem; font-family: var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); margin: .4rem 0; }
+
+  button {
+    font-family: var(--mono); font-size: .78rem; color: var(--ink);
+    background: var(--paper); border: 1px solid var(--line); border-radius: 6px;
+    padding: .45rem .9rem; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--paper); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .4; cursor: default; }
+  .btnrow { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; align-items: center; }
+  .note { font-size: .88rem; color: var(--ink-soft); }
+  .note.flash { color: var(--accent); }
+
+  /* Index explorer */
+  .idxbtns { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .8rem; }
+  .idxbtns button[aria-pressed="true"] { background: var(--accent); color: var(--paper); border-color: var(--accent); font-weight: 600; }
+  #idxlist { position: relative; }
+  .entry {
+    font-family: var(--mono); font-size: .8rem; padding: .22rem .6rem;
+    border: 1px solid var(--line); border-radius: 5px; margin: .3rem 0;
+    background: var(--paper); transition: transform .45s cubic-bezier(.4,0,.2,1), background .3s, border-color .3s;
+    display: flex; gap: .35rem; flex-wrap: wrap;
+  }
+  .entry.hot { background: var(--accent-soft); border-color: var(--accent); }
+  .entry .k0 { font-weight: 700; }
+  .keyorder { font-family: var(--mono); font-size: .78rem; color: var(--ink-soft); margin: .3rem 0 .7rem; }
+  .keyorder b { color: var(--accent); }
+
+  /* Query stepper */
+  .clauses { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+  .clause {
+    font-family: var(--mono); font-size: .84rem; padding: .45rem .8rem;
+    border: 1px solid var(--line); border-radius: 6px; background: var(--paper);
+    color: var(--ink-soft); transition: border-color .2s, background .2s, color .2s;
+  }
+  .clause.done { color: var(--ink); }
+  .clause.now { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+  .var { color: var(--bind); font-weight: 600; }
+  .bindings { display: flex; gap: .45rem; flex-wrap: wrap; min-height: 2.1rem; align-items: center; }
+  .chip {
+    font-family: var(--mono); font-size: .78rem; padding: .2rem .6rem;
+    border-radius: 99px; background: var(--bind-soft); border: 1px solid var(--bind); color: var(--ink);
+  }
+  #qexplain { min-height: 3.4em; font-size: .92rem; color: var(--ink-soft); margin-top: .7rem; }
+  .factline { font-family: var(--mono); font-size: .78rem; padding: .12rem .5rem; border-radius: 4px; }
+  .factline.match { background: var(--accent-soft); }
+  .factline.reject { color: var(--dim); }
+
+  /* Unbreakable past */
+  .bigcount { font-family: var(--mono); font-size: 2rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .verdict { font-family: var(--mono); font-size: .84rem; }
+  .answerbox {
+    font-family: var(--mono); font-size: .84rem; border: 1px dashed var(--accent);
+    border-radius: 6px; padding: .6rem .9rem; background: var(--accent-soft); margin: .6rem 0;
+  }
+  .shake { animation: shake .3s; }
+  @keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .entry, .txcard { transition: none; }
+    .shake { animation: none; }
+  }
+  .theoremtable { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  .theoremtable td { border-top: 1px solid var(--line); padding: .55rem .4rem; vertical-align: top; }
+  .theoremtable td:first-child { font-family: var(--mono); font-size: .76rem; white-space: nowrap; color: var(--accent); padding-right: 1rem; }
+  footer { margin-top: 4rem; padding-top: 1.2rem; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: .9rem; }
+</style>
+
+</head>
+<body>
+<main>
+  <h1>The database that remembers everything</h1>
+  <p class="subtitle">An interactive tour of <strong>DatomBau</strong> — a small Datomic-style database rebuilt in the Lean&nbsp;4 theorem prover, where the promises come with machine-checked proofs.</p>
+
+  <p>Most databases store a system's <em>current state</em> and destroy the past on every update — like knowing a particle's position now, with no record of its trajectory. DatomBau (like Datomic, the database it reimplements) stores the <em>whole trajectory</em>: an append-only log of events. The current state, states at any earlier time, indexes, and query answers are all just <em>projections</em> of that log. And because it lives inside a proof assistant, "just projections" is not a slogan — it is a list of theorems.</p>
+
+  <p class="eyebrow">Fig. 1 — The event</p>
+  <div class="fig">
+    <div class="figlabel"><b>Datom anatomy</b> · click each slot</div>
+    <div class="anatomy" id="anatomy">
+      <div class="slot" tabindex="0" data-k="e">#1<small>entity</small></div>
+      <div class="slot" tabindex="0" data-k="a">:person/name<small>attribute</small></div>
+      <div class="slot" tabindex="0" data-k="v">"Ada"<small>value</small></div>
+      <div class="slot" tabindex="0" data-k="tx">@tx&nbsp;4<small>transaction</small></div>
+      <div class="slot" tabindex="0" data-k="op">+<small>assert / retract</small></div>
+    </div>
+    <div id="anatomy-note">A <b>datom</b> is the atomic unit: one timestamped, signed statement about the world. Click the slots.</div>
+  </div>
+
+  <p>Everything in the database is built from these five-part events. Nothing is ever overwritten: to change Ada's name you don't edit a row, you append a retraction of the old fact and an assertion of the new one — both stamped with the transaction in which they happened.</p>
+
+  <p class="eyebrow">Fig. 2 — The time machine</p>
+  <div class="fig">
+    <div class="figlabel"><b>The log is truth</b> · drag the basis <span class="mono">t</span></div>
+    <div class="timebar">
+      <span class="mono" style="font-size:.78rem; color:var(--ink-soft)">asOf</span>
+      <input type="range" id="basis" min="0" max="5" value="5" step="1" aria-label="basis transaction">
+      <span class="basis" id="basisLabel">t = 5</span>
+    </div>
+    <div class="split">
+      <div>
+        <div class="colhead">the log (append-only)</div>
+        <div id="log"></div>
+      </div>
+      <div>
+        <div class="colhead">current facts, as of t — a pure function of the log</div>
+        <table class="viewtable" id="view"></table>
+        <div class="btnrow">
+          <button id="appendBtn" class="primary">append a new transaction</button>
+          <button id="resetBtn">reset</button>
+        </div>
+        <div class="note" id="appendNote" style="margin-top:.6rem"></div>
+      </div>
+    </div>
+  </div>
+
+  <p>The rule for "is fact <em>f</em> true at basis <em>t</em>?" is one line: <em>find the last datom about f with transaction ≤ t; the fact holds iff that datom was an assertion.</em> In DatomBau this really is the definition — a function called <code>lastWrite</code> — and time travel (<code>asOf t</code>) is nothing more than filtering the log to transactions ≤ t. Try appending a transaction while the slider sits in the past: the view at <em>t</em> cannot move, and that's a theorem, not an observation.</p>
+
+  <div class="lean"><span class="cm">-- Spec.lean — value equality, no side conditions beyond freshness:</span>
+<span class="kw">theorem</span> Db.asOf_append (hfresh : db.maxTx &lt; t.id) (htx : tx ≤ db.maxTx) :
+    (db.append t).asOf tx = db.asOf tx</div>
+
+  <p class="eyebrow">Fig. 3 — Four coordinate systems, one reality</p>
+  <div class="fig">
+    <div class="figlabel"><b>Indexes</b> · the same current facts, sorted four ways</div>
+    <div class="idxbtns" id="idxbtns">
+      <button data-idx="EAVT" aria-pressed="true">EAVT</button>
+      <button data-idx="AEVT" aria-pressed="false">AEVT</button>
+      <button data-idx="AVET" aria-pressed="false">AVET</button>
+      <button data-idx="VAET" aria-pressed="false">VAET</button>
+      <button id="hotBtn" style="margin-left:auto">highlight: everything about #2</button>
+    </div>
+    <div class="keyorder" id="keyorder"></div>
+    <div id="idxlist"></div>
+    <div class="note" id="idxnote" style="margin-top:.6rem"></div>
+  </div>
+
+  <p>An index is a <em>choice of coordinates</em> on the same set of events — sorting by entity-first makes "everything about #2" a contiguous block; value-first makes "who points at #1" contiguous instead. No new information is created by re-sorting, and DatomBau proves precisely that: membership in each index is <em>equivalent</em> to the log's <code>lastWrite</code> saying "asserted, in exactly that transaction". The coordinate change provably preserves the physics.</p>
+
+  <p class="eyebrow">Fig. 4 — Asking questions</p>
+  <div class="fig">
+    <div class="figlabel"><b>Query = pattern matching + joins</b> · who are Grace's friends? (at t = 4)</div>
+    <div class="clauses" id="clauses"></div>
+    <div class="colhead">bindings</div>
+    <div class="bindings" id="bindings"><span class="note">no variables bound yet</span></div>
+    <div class="colhead" style="margin-top:.8rem">facts scanned by the current clause</div>
+    <div id="qfacts"><span class="note">press “step”</span></div>
+    <div class="btnrow">
+      <button id="qPrev">‹ back</button>
+      <button id="qNext" class="primary">step ›</button>
+      <button id="qReset">restart</button>
+    </div>
+    <div id="qexplain"></div>
+  </div>
+
+  <p>A query is a conjunction of patterns; variables (<span class="var">?g</span>, <span class="var">?f</span>, <span class="var">?n</span>) thread through them and each clause filters-and-extends the set of consistent assignments. DatomBau's engine is deliberately the dumbest possible left-to-right fold — because that shape is what makes the two flagship proofs go through: <em>soundness</em> (every answer really matches every clause) and <em>completeness</em> (every assignment that matches is found). Fast evaluation via the indexes is then proven equivalent through a single bridge theorem, so optimization can never silently change an answer.</p>
+
+  <p class="eyebrow">Fig. 5 — Try to change the past</p>
+  <div class="fig">
+    <div class="figlabel"><b>The headline theorem, empirically</b></div>
+    <p style="margin-top:0">The panel below keeps asking the same question about the world <em>as of t = 3</em>: <code>[:find ?e ?n :where [?e :person/name ?n]]</code>. The button transacts new facts into the database. The answer is recomputed from scratch after every write.</p>
+    <div class="answerbox" id="frozenAnswer"></div>
+    <div class="btnrow">
+      <button id="meddleBtn" class="primary">transact something new</button>
+      <span class="verdict">attempts: <span class="bigcount" id="attempts">0</span>&nbsp;&nbsp;past changed: <span class="bigcount" id="changed">0</span></span>
+    </div>
+    <div class="note" style="margin-top:.6rem">You can press it all day. This is the theorem the whole design exists to make a one-line proof:</div>
+    <div class="lean" style="margin-top:.7rem"><span class="cm">-- Query.lean — the "database as a value" theorem:</span>
+<span class="kw">theorem</span> Db.query_asOf_stable_data
+    (h : db.transactData forms now = .ok r) (ht : t ≤ db.maxTx) (q : Query) :
+    (r.db.asOf t).query q = (db.asOf t).query q</div>
+  </div>
+
+  <h2>What "verified" buys you</h2>
+  <p>Ordinary databases test their promises; DatomBau proves them. Each layer of the system earns a flagship theorem, checked by Lean's kernel — there is no <code>sorry</code> (unproven claim) anywhere on the main branch:</p>
+  <table class="theoremtable">
+    <tr><td>asOf_append</td><td>Appending never changes any past view — as literal equality of database values.</td></tr>
+    <tr><td>transact_wf</td><td>The transactor preserves well-formedness: monotone time, bounded ids, every stored datom well-typed.</td></tr>
+    <tr><td>transactAt_cardOne</td><td>A cardinality-one attribute never holds two values at once.</td></tr>
+    <tr><td>transactAt_unique</td><td>A unique (attribute, value) pair identifies at most one entity.</td></tr>
+    <tr><td>ofDb_wf</td><td>Index membership ⇔ the log's last write asserted the fact, in exactly that transaction.</td></tr>
+    <tr><td>evalSpec_sound / _complete</td><td>Query answers are exactly the matching assignments — nothing bogus, nothing missed.</td></tr>
+    <tr><td>evalIdx_mem_iff</td><td>The index-backed engine answers exactly what the reference engine answers.</td></tr>
+    <tr><td>query_asOf_stable</td><td>No future transaction can change the answer of any query about the past.</td></tr>
+  </table>
+
+  <footer>
+    DatomBau is ~2,400 lines of Lean 4 with zero external dependencies —
+    source, theorems, and demo at
+    <a href="https://github.com/tobiasosborne/DatomBau">github.com/tobiasosborne/DatomBau</a>.
+    The written tutorial
+    (<a href="https://github.com/tobiasosborne/DatomBau/blob/master/TUTORIAL.md">TUTORIAL.md</a>)
+    walks through the same ideas with runnable code, and
+    <span class="mono">./run.sh</span> executes the end-to-end demo this page is based on.
+  </footer>
+</main>
+
+<script>
+(function () {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- Fig 1: datom anatomy ---------- */
+  const NOTES = {
+    e:  "<b>Entity #1</b> — the thing the statement is about. Just a number; its meaning is the set of facts attached to it. Transactions are entities too.",
+    a:  "<b>Attribute :person/name</b> — a namespaced keyword naming the observable. Its type, cardinality, and uniqueness are declared in the schema.",
+    v:  "<b>Value \"Ada\"</b> — a typed payload: string, integer, boolean, keyword, instant, or a <i>reference to another entity</i>, which is what turns facts into a graph.",
+    tx: "<b>Transaction 4</b> — the event's timestamp, and itself an entity: every transaction carries its own :db/txInstant fact, so time is queryable like anything else.",
+    op: "<b>+ / −</b> — asserted or retracted. Nothing is ever deleted; a retraction is one more event appended to history."
+  };
+  const note = document.getElementById("anatomy-note");
+  document.querySelectorAll(".slot").forEach(s => {
+    const act = () => {
+      document.querySelectorAll(".slot").forEach(x => x.classList.remove("active"));
+      s.classList.add("active");
+      note.innerHTML = NOTES[s.dataset.k];
+    };
+    s.addEventListener("click", act);
+    s.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); act(); } });
+  });
+
+  /* ---------- shared model ---------- */
+  // datom: [e, attr, value, added]
+  const BASE_TXS = [
+    { id: 3, instant: 1000, datoms: [
+      [3, ":db/txInstant", "@1000", true],
+      [1, ":person/name", "\"Ada\"", true],
+      [1, ":person/email", "\"ada@lovelace.io\"", true],
+      [2, ":person/name", "\"Grace\"", true],
+      [2, ":person/email", "\"grace@hopper.io\"", true],
+      [2, ":person/friend", "#1", true],
+    ]},
+    { id: 4, instant: 2000, datoms: [
+      [4, ":db/txInstant", "@2000", true],
+      [1, ":person/name", "\"Ada\"", false],
+      [1, ":person/name", "\"Ada Lovelace\"", true],
+    ]},
+    { id: 5, instant: 3000, datoms: [
+      [5, ":db/txInstant", "@3000", true],
+      [1, ":person/name", "\"Ada Lovelace\"", false],
+      [1, ":person/email", "\"ada@lovelace.io\"", false],
+      [2, ":person/friend", "#1", false],
+    ]},
+  ];
+  const clone = txs => txs.map(t => ({ ...t, datoms: t.datoms.map(d => [...d]) }));
+
+  // lastWrite: the definition from Spec.lean, transcribed.
+  function lastWrite(txs, basis, e, a, v) {
+    let res = null;
+    for (const t of txs) {
+      if (t.id > basis) continue;
+      for (const d of t.datoms) {
+        if (d[0] === e && d[1] === a && d[2] === v) res = { tx: t.id, added: d[3] };
+      }
+    }
+    return res;
+  }
+  function currentFacts(txs, basis) {
+    const seen = new Set(), out = [];
+    for (const t of txs) {
+      if (t.id > basis) continue;
+      for (const [e, a, v] of t.datoms) {
+        const k = e + "|" + a + "|" + v;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const lw = lastWrite(txs, basis, e, a, v);
+        out.push({ e, a, v, tx: lw.tx, live: lw.added });
+      }
+    }
+    return out;
+  }
+
+  /* ---------- Fig 2: time machine ---------- */
+  let TXS = clone(BASE_TXS);
+  const slider = document.getElementById("basis");
+  const basisLabel = document.getElementById("basisLabel");
+  const logEl = document.getElementById("log");
+  const viewEl = document.getElementById("view");
+  const appendNote = document.getElementById("appendNote");
+
+  function renderLog() {
+    const basis = +slider.value;
+    logEl.innerHTML = "";
+    for (const t of TXS) {
+      const card = document.createElement("div");
+      card.className = "txcard" + (t.id > basis ? " future" : "");
+      const rows = t.datoms.map(d =>
+        `<div class="drow ${d[3] ? "add" : "retract"}"><span class="op">${d[3] ? "+" : "−"}</span><span class="body">#${d[0]} ${esc(d[1])} ${esc(d[2])}</span></div>`).join("");
+      card.innerHTML = `<div class="txhead"><span class="txid">tx ${t.id}</span><span>@${t.instant}</span></div>${rows}`;
+      logEl.appendChild(card);
+    }
+  }
+  function renderView() {
+    const basis = +slider.value;
+    basisLabel.textContent = "t = " + basis;
+    const facts = currentFacts(TXS, basis).filter(f => f.live);
+    let html = "<tr><th>e</th><th>attribute</th><th>value</th><th>asserted</th></tr>";
+    if (facts.length === 0) html += `<tr><td colspan="4" style="color:var(--dim)">— nothing yet —</td></tr>`;
+    for (const f of facts)
+      html += `<tr><td>#${f.e}</td><td>${esc(f.a)}</td><td>${esc(f.v)}</td><td class="tx">tx ${f.tx}</td></tr>`;
+    viewEl.innerHTML = html;
+  }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+  slider.addEventListener("input", () => { renderLog(); renderView(); });
+
+  const EXTRA = [
+    { who: 2, retract: "\"Grace\"", assert: "\"Grace Hopper\"", attr: ":person/name" },
+    { who: 2, retract: "\"grace@hopper.io\"", assert: "\"grace@navy.mil\"", attr: ":person/email" },
+  ];
+  let extraIdx = 0;
+  document.getElementById("appendBtn").addEventListener("click", () => {
+    if (extraIdx >= EXTRA.length) { appendNote.textContent = "history is long enough — reset to play again."; return; }
+    const before = +slider.value;
+    const x = EXTRA[extraIdx++];
+    const id = TXS[TXS.length - 1].id + 1;
+    TXS.push({ id, instant: 1000 * (id - 2), datoms: [
+      [id, ":db/txInstant", "@" + 1000 * (id - 2), true],
+      [x.who, x.attr, x.retract, false],
+      [x.who, x.attr, x.assert, true],
+    ]});
+    slider.max = id;
+    renderLog(); renderView();
+    appendNote.className = "note flash";
+    appendNote.textContent = before < id
+      ? `appended tx ${id} — and your view at t = ${before} did not move. (Db.asOf_append)`
+      : `appended tx ${id}. Drag the slider back: no past view has changed.`;
+  });
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    TXS = clone(BASE_TXS); extraIdx = 0; slider.max = 5; slider.value = 5;
+    appendNote.textContent = ""; appendNote.className = "note";
+    renderLog(); renderView();
+  });
+  renderLog(); renderView();
+
+  /* ---------- Fig 3: indexes ---------- */
+  // Current entries at basis 4 of the base log.
+  const ENTRIES = currentFacts(BASE_TXS, 4).filter(f => f.live);
+  const ORDERS = {
+    EAVT: { keys: ["e", "a", "v", "tx"], blurb: "entity-first: a row store — everything about one entity sits together." },
+    AEVT: { keys: ["a", "e", "v", "tx"], blurb: "attribute-first: a column store — one attribute across all entities." },
+    AVET: { keys: ["a", "v", "e", "tx"], blurb: "attribute-value: the lookup index — \"who has this value for this attribute?\"" },
+    VAET: { keys: ["v", "a", "e", "tx"], blurb: "value-first (refs only in the real index): the reverse-reference index — \"who points here?\"" },
+  };
+  const idxlist = document.getElementById("idxlist");
+  const keyorder = document.getElementById("keyorder");
+  const idxnote = document.getElementById("idxnote");
+  let hotOn = false;
+  let currentOrder = "EAVT";
+
+  ENTRIES.forEach((f, i) => {
+    const div = document.createElement("div");
+    div.className = "entry"; div.dataset.i = i;
+    idxlist.appendChild(div);
+  });
+  function fieldStr(f, k) {
+    return k === "e" ? "#" + f.e : k === "tx" ? "tx" + f.tx : String(f[k]);
+  }
+  function cmpBy(keys) {
+    return (x, y) => {
+      for (const k of keys) {
+        const a = fieldStr(x, k), b = fieldStr(y, k);
+        if (a !== b) return a < b ? -1 : 1;
+      }
+      return 0;
+    };
+  }
+  function renderIdx(order) {
+    currentOrder = order;
+    const { keys, blurb } = ORDERS[order];
+    keyorder.innerHTML = "sort key: " + keys.map((k, i) => (i === 0 ? "<b>" + k.toUpperCase() + "</b>" : k.toUpperCase())).join(" → ") + " — " + blurb;
+    const sorted = [...ENTRIES].sort(cmpBy(keys));
+    // FLIP: record old positions
+    const nodes = [...idxlist.children];
+    const first = new Map(nodes.map(n => [n.dataset.i, n.getBoundingClientRect().top]));
+    // reorder DOM
+    sorted.forEach(f => {
+      const n = nodes.find(x => +x.dataset.i === ENTRIES.indexOf(f));
+      n.innerHTML = keys.map((k, i) =>
+        `<span class="${i === 0 ? "k0" : ""}">${esc(fieldStr(f, k))}</span>`).join(" ");
+      n.classList.toggle("hot", hotOn && f.e === 2);
+      idxlist.appendChild(n);
+    });
+    if (!reduced) {
+      [...idxlist.children].forEach(n => {
+        const dy = first.get(n.dataset.i) - n.getBoundingClientRect().top;
+        if (dy) {
+          n.style.transition = "none"; n.style.transform = `translateY(${dy}px)`;
+          requestAnimationFrame(() => { n.style.transition = ""; n.style.transform = ""; });
+        }
+      });
+    }
+    if (hotOn) {
+      const hotRows = [...idxlist.children].map((n, i) => n.classList.contains("hot") ? i : -1).filter(i => i >= 0);
+      const contiguous = hotRows.length && hotRows[hotRows.length - 1] - hotRows[0] === hotRows.length - 1;
+      idxnote.textContent = contiguous
+        ? `under ${order}, entity #2's facts form one contiguous block — a range scan.`
+        : `under ${order}, entity #2's facts are scattered — this coordinate system answers other questions cheaply.`;
+    } else idxnote.textContent = "";
+  }
+  document.querySelectorAll("#idxbtns button[data-idx]").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll("#idxbtns button[data-idx]").forEach(x => x.setAttribute("aria-pressed", x === b));
+      renderIdx(b.dataset.idx);
+    });
+  });
+  document.getElementById("hotBtn").addEventListener("click", () => {
+    hotOn = !hotOn; renderIdx(currentOrder);
+  });
+  renderIdx("EAVT");
+
+  /* ---------- Fig 4: query stepper ---------- */
+  const QFACTS = currentFacts(BASE_TXS, 4).filter(f => f.live && f.a !== ":db/txInstant");
+  const CLAUSES = [
+    { html: `[<span class="var">?g</span> :person/name "Grace"]`, run: b => QFACTS.filter(f => f.a === ":person/name" && f.v === "\"Grace\"").map(f => ({ ...b, g: "#" + f.e })), why: "Scan for name = \"Grace\": one fact matches, binding ?g to #2." },
+    { html: `[<span class="var">?g</span> :person/friend <span class="var">?f</span>]`, run: b => QFACTS.filter(f => f.a === ":person/friend" && "#" + f.e === b.g).map(f => ({ ...b, f: f.v })), why: "?g is already #2, so only #2's friend facts can extend the binding: ?f becomes #1. A join is just consistency of bindings across clauses." },
+    { html: `[<span class="var">?f</span> :person/name <span class="var">?n</span>]`, run: b => QFACTS.filter(f => f.a === ":person/name" && "#" + f.e === b.f).map(f => ({ ...b, n: f.v })), why: "?f is #1; at t = 4 Ada's current name is \"Ada Lovelace\" (the tx-4 rename retracted \"Ada\"). Final answer: ?n = \"Ada Lovelace\"." },
+  ];
+  const clausesEl = document.getElementById("clauses");
+  CLAUSES.forEach(c => {
+    const d = document.createElement("div");
+    d.className = "clause"; d.innerHTML = c.html;
+    clausesEl.appendChild(d);
+  });
+  const bindingsEl = document.getElementById("bindings");
+  const qfactsEl = document.getElementById("qfacts");
+  const qexplain = document.getElementById("qexplain");
+  let qstep = 0; // 0 = not started; k = clauses 1..k done
+  function qRender() {
+    [...clausesEl.children].forEach((n, i) => {
+      n.classList.toggle("done", i < qstep);
+      n.classList.toggle("now", i === qstep - 1);
+    });
+    let bindings = [{}];
+    for (let i = 0; i < qstep; i++) bindings = bindings.flatMap(CLAUSES[i].run);
+    const b = bindings[0] || {};
+    bindingsEl.innerHTML = Object.keys(b).length
+      ? Object.entries(b).map(([k, v]) => `<span class="chip">?${k} = ${esc(v)}</span>`).join("")
+      : `<span class="note">no variables bound yet</span>`;
+    if (qstep === 0) {
+      qfactsEl.innerHTML = `<span class="note">press “step”</span>`;
+      qexplain.textContent = "Three patterns, three shared variables. Each step scans the facts and keeps only assignments consistent with everything so far.";
+    } else {
+      const prevB = (() => { let bs = [{}]; for (let i = 0; i < qstep - 1; i++) bs = bs.flatMap(CLAUSES[i].run); return bs[0] || {}; })();
+      const survivors = CLAUSES[qstep - 1].run(prevB);
+      qfactsEl.innerHTML = QFACTS.map(f => {
+        const line = `[#${f.e} ${esc(f.a)} ${esc(f.v)}]`;
+        const isMatch = survivors.some(s =>
+          (qstep === 1 && f.a === ":person/name" && f.v === "\"Grace\"") ||
+          (qstep === 2 && f.a === ":person/friend" && "#" + f.e === prevB.g) ||
+          (qstep === 3 && f.a === ":person/name" && "#" + f.e === prevB.f));
+        return `<div class="factline ${isMatch ? "match" : "reject"}">${line}</div>`;
+      }).join("");
+      qexplain.textContent = CLAUSES[qstep - 1].why + (qstep === 3 ? " Soundness and completeness of this procedure are theorems (evalSpec_sound, evalSpec_complete)." : "");
+    }
+    document.getElementById("qPrev").disabled = qstep === 0;
+    document.getElementById("qNext").disabled = qstep === CLAUSES.length;
+  }
+  document.getElementById("qNext").addEventListener("click", () => { if (qstep < CLAUSES.length) qstep++; qRender(); });
+  document.getElementById("qPrev").addEventListener("click", () => { if (qstep > 0) qstep--; qRender(); });
+  document.getElementById("qReset").addEventListener("click", () => { qstep = 0; qRender(); });
+  qRender();
+
+  /* ---------- Fig 5: unbreakable past ---------- */
+  let FROZEN_TXS = clone(BASE_TXS);
+  const NAMES = ["\"Alan\"", "\"Emmy\"", "\"Paul\"", "\"Lise\"", "\"Erwin\"", "\"Rosalind\"", "\"Max\"", "\"Marie\""];
+  let attempts = 0, changed = 0, nextE = 10;
+  const frozenAnswer = document.getElementById("frozenAnswer");
+  function frozenQuery() {
+    return currentFacts(FROZEN_TXS, 3)
+      .filter(f => f.live && f.a === ":person/name")
+      .map(f => `[#${f.e} ${esc(f.v)}]`).join("  ");
+  }
+  const baseline = frozenQuery();
+  function renderFrozen() {
+    frozenAnswer.innerHTML = `asOf t = 3 → ${frozenQuery()}`;
+  }
+  document.getElementById("meddleBtn").addEventListener("click", () => {
+    const id = FROZEN_TXS[FROZEN_TXS.length - 1].id + 1;
+    FROZEN_TXS.push({ id, instant: 1000 * id, datoms: [
+      [id, ":db/txInstant", "@" + 1000 * id, true],
+      [nextE, ":person/name", NAMES[attempts % NAMES.length], true],
+    ]});
+    nextE++; attempts++;
+    if (frozenQuery() !== baseline) changed++;
+    document.getElementById("attempts").textContent = attempts;
+    document.getElementById("changed").textContent = changed;
+    renderFrozen();
+    if (!reduced) {
+      frozenAnswer.classList.remove("shake");
+      void frozenAnswer.offsetWidth;
+      frozenAnswer.classList.add("shake");
+    }
+  });
+  renderFrozen();
+})();
+</script>
+</body>
+</html>
