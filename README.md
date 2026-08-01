@@ -130,3 +130,7 @@ reader + REPL, incremental index maintenance (behind the same `WF`
 contract), per-clause index selection (behind the same bridge theorem),
 slice-based prefix scans, comparison predicates in queries. Out of scope:
 excision, partitions, the peer/caching model.
+
+## License
+
+[AGPL-3.0](LICENSE).
